@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import datetime, date, timedelta
 
 import pandas as pd
 import pandas_market_calendars as mcal
@@ -8,6 +8,8 @@ import numpy as np
 from pypfopt import expected_returns
 from pypfopt import risk_models
 from pypfopt import EfficientFrontier
+
+import matplotlib.pyplot as plt
 
 # Does this only do weekdays, is there not prices for weekends?
 def daterange(start_date, end_date):
@@ -21,7 +23,8 @@ def daterange(start_date, end_date):
 
 # Nonconvex objective function from Kolm et al (2014)
 def deviation_risk_parity(w, cov_matrix):
-    diff = w * np.dot(cov_matrix, w) - (w * np.dot(cov_matrix, w)).reshape(-1, 1)
+    diff = w * np.dot(cov_matrix, w) - \
+        (w * np.dot(cov_matrix, w)).reshape(-1, 1)
     return (diff ** 2).sum().sum()
 
 # capitalize these class names?
@@ -41,7 +44,7 @@ class orderbook():
 
         self.dict = ticker_dict
         self.prices_df = prices_df
-        self.cash = 10000 # 10k
+        self.cash = 10000  # 10k
 
     # maybe pass price if we want ease of access with some total for asset
     # is this irrelevant given the current implementation? best practice to not access the instance variables directly?
@@ -55,9 +58,8 @@ class orderbook():
 class data_for_analysis():
 
     def __init__(self, start_date, end_date):
-        date_list = pd.date_range(start=start_date,end=end_date).tolist()
+        date_list = pd.date_range(start=start_date, end=end_date).tolist()
         self.aum_dict = dict.fromkeys(date_list)
-
 
     def calculate_current_aum(self, shares_dict, current_date, current_prices, ticker_list):
         # we do this to graph
@@ -68,11 +70,18 @@ class data_for_analysis():
         # don't have to pass in ticker_list but just makes it easier than using shares_dict.keys()
         for ticker in ticker_list:
             print("Current price for ticker: ", current_prices[ticker])
-            aum_total += shares_dict[ticker]['current_shares'] * current_prices[ticker] # is this going to be an int or series?
+            # is this going to be an int or series?
+            aum_total += shares_dict[ticker]['current_shares'] * \
+                current_prices[ticker]
 
         self.aum_dict[current_date] = aum_total
 
         return aum_total
+
+    def plot(self):
+        df = pd.DataFrame.from_dict(self.aum_dict, orient='index')
+        df.plot()
+        plt.show()
 
 
 class back_trader():
@@ -86,13 +95,15 @@ class back_trader():
 
     def strat(self, prices_df, current_date):
         # returns dict of ticker to percentage
-        
-        prices_df = prices_df[:current_date] # !!! make sure this works properly
+
+        # !!! make sure this works properly
+        prices_df = prices_df[:current_date]
         # print("Prices Def in Strat:", prices_df.head())
 
-        returns = prices_df.pct_change().dropna() # !!! these values were odd
+        returns = prices_df.pct_change().dropna()  # !!! these values were odd
         mu = expected_returns.mean_historical_return(prices_df)
-        S = risk_models.sample_cov(prices_df) # !!! why is it not 1 on the diagonal
+        # !!! why is it not 1 on the diagonal
+        S = risk_models.sample_cov(prices_df)
 
         ef = EfficientFrontier(mu, S)
         weights = ef.nonconvex_objective(deviation_risk_parity, ef.cov_matrix)
@@ -146,13 +157,20 @@ class back_trader():
             current_prices = self.order_book.prices_df.loc[date_string]
             # print("Current prices: ", current_prices)
             # takes current percentage allocation (before any reallocation)
-            current_aum = self.analysis_obj.calculate_current_aum(self.order_book.dict, date_string, current_prices, ticker_list)
+            current_aum = self.analysis_obj.calculate_current_aum(
+                self.order_book.dict, date_string, current_prices, ticker_list)
             print(current_aum)
-            
+
             # uncomment once strat is implemented
 
             # for every week do this at end of day? maybe yield an additional value in datarange that indicates whether it's Friday
             # ig call it on first iteration too, with buying power as a run() param, that way the current_shares values start at something
-            percentage_dict = self.strat(self.order_book.prices_df, single_date) # make sure these are the necessary params
+            # make sure these are the necessary params
+            percentage_dict = self.strat(
+                self.order_book.prices_df, single_date)
             # should we pass anything so that we can keep track of bought_at_price
-            self.get_updated_allocations(percentage_dict, current_prices, current_aum)  # pass aum, at this point it's buying power?
+            # pass aum, at this point it's buying power?
+            self.get_updated_allocations(
+                percentage_dict, current_prices, current_aum)
+
+        self.analysis_obj.plot()
