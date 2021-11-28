@@ -3,9 +3,15 @@ from datetime import datetime, date, timedelta
 import pandas as pd
 import pandas_datareader as web
 
+import numpy as np
+
 from backtest import orderbook
 from backtest import back_trader
 from backtest import data_for_analysis
+
+from pypfopt import expected_returns
+from pypfopt import risk_models
+from pypfopt import EfficientFrontier
 
 ticker_list = ['VNQ','EEM','EFA','QQQ','SPY']
 
@@ -23,8 +29,8 @@ for ticker in ticker_list:
 
     stock_series.append(prices) # do I have to convert from series to list
 
+# !!! Do I have to normalize the price?
 df_stocks = pd.concat(stock_series, axis=1)
-print(df_stocks.head())
 
 # should df_stocks be a param in orderbook?
 new_order_book = orderbook(ticker_list, df_stocks)
